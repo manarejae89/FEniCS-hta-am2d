@@ -10,19 +10,19 @@ wid     = 5          # Width of domain [mm]
 hei     = 0.25       # Height of powder layer [mm]
 hei0    = 2          # Height of building platform [mm] [paper = 2]
 
-nlay    = 1          # Number of powder layers
+nlay    = 2          # Number of powder layers
 
-# <---------- l ----------> #
+# <---------- wid ----------> #
 #
 # ------------------------- # ^
-#           Layer 3         # h
+#           Layer 3         # hei
 # ------------------------- # ˅
 #           Layer 2         #
 # ------------------------- #
 #           Layer 1         #
 # ------------------------- # ^
 #                           # |
-#       Building platform   # h0
+#       Building platform   # hei0
 #                           # |
 # ------------------------- # ˅
 
@@ -45,8 +45,8 @@ xx3     = 5     	   # Parameter to describe the decay of the exponential in the 
 grf	    = 1         # Global Resolution Factor (space and time)
 
 tau = lenlas/vel	# Time for a deposition [s] {3.33s for lenlas=125 vel=33.33}
-num_steps = 25*grf	# Number of time steps for a deposition/powder layer
-dt	= tau/num_steps	# time step size
+num_steps = 25*grf	# Number of time steps between depositions/powder layers
+dt	= tau/num_steps	# Time step size
 
 T = tau*nlay      	# Final time
 
@@ -56,7 +56,7 @@ theta_a = 25 	# Ambient temperature (C)
 theta_s = 25 	# Building platform inital temperature (C)
 theta_m = 25 	# Powder temperature (C)
 
-# Material properties (constant)
+## Material properties (constant)
 # Heat conductivity
 kappa_m = 0.021		# Heat conductivity of material [W.mm-1.K]
 kappa_s = 0.021		# Heat conductivity of building platform (substrate) [[W.mm-1.K] [TODO]
