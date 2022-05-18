@@ -34,17 +34,10 @@ parameters["allow_extrapolation"] = True  # V_coarse to V projection
 
 def state(i):
 
-    #Omega_i = Rectangle(Point(-data.wid/2, (i-1)*data.hei), Point(data.wid/2, i*data.hei))
-    # Omega_i = Rectangle(Point(-data.wid/2, 0), Point(data.wid/2, i*data.hei))
-    # Omega = Omega_0 + Omega_i
-    #Omega.set_subdomain(0, Omega_0) #NOT NECCESARY
-    # for i in range(1,i+1):
-    # Omega.set_subdomain(i, Rectangle(Point(-data.wid/2, (i-1)*data.hei), Point(data.wid/2, i*data.hei)))
-
     tol	= DOLFIN_EPS
     # # Sub-domain definitions:
     # omega0 = CompiledSubDomain('x[1] <= 0.0 + tol', tol=tol)
-    # #omega1 = CompiledSubDomain('x[1] >= 0.0 - tol', tol=tol)
+    # omega1 = CompiledSubDomain('x[1] >= 0.0 - tol', tol=tol)
 
     # Mesh and Function Space
     global mesh
@@ -52,9 +45,7 @@ def state(i):
     xelem = 25#number of nodes in the x-direction
     yelem = 5#number of nodes in the y-direction per powder layer
     mesh = RectangleMesh(Point(-data.wid/2, -data.hei0), Point(data.wid/2, i*data.hei), resolution_factor*xelem, resolution_factor*(yelem*(int(data.hei0/data.hei)+i)), "crossed")
-    #mesh = RectangleMesh(Point(-data.wid/2, -data.hei0), Point(data.wid/2, i*data.hei), resolution_factor*10, resolution_factor*(20+10*i), "crossed")
-    #mesh = RectangleMesh(Point(-data.wid/2, -data.hei0), Point(data.wid/2, i*data.hei), resolution_factor*10, resolution_factor*(1+int(data.hei0/data.hei)*i)*10, "crossed")
-    # mesh = generate_mesh(Omega, 256)
+
     global V
     V = FunctionSpace(mesh, 'P', 1)
 
@@ -85,39 +76,35 @@ def state(i):
     Gamma_minus1.mark(subboundaries, 5)	# Bottom 		= Gamma_-1
     Gamma1.mark(subboundaries, 6)		# Top 			= Gamma_i
     Gamma0.mark(subboundaries, 7)		# Interphase	= Gamma_0
-    #Save sub domains to VTK files
+    ## Save sub-boundaries to VTK files
     #file = File(inputfile + '_results/subboundaries.pvd')
     #file << subboundaries
-
+    ## Save sub-domains to VTK files
     # subdomains = MeshFunction("size_t", mesh, mesh.topology().dim(), mesh.domains()) #Cells
     #file = File(inputfile + '_results/subdomains.pvd')
     #file << subdomains
-
+    ## Save material-domains to VTK files
     # materials = MeshFunction("size_t", mesh, mesh.topology().dim(), mesh.domains()) #Cells
     # materials.set_all(1)
     # omega0.mark(materials, 0)
     #file = File(inputfile + '_results/materials.pvd')
     #file << materials
 
-    # Define initial value
-    global u_n
+    # Define initial values
+    global theta_n, liq_n, sol_n
 
     if i==1:
-        u_0 = Expression('x[1] <= 0.0 + tol ? theta_s : theta_m', degree=0, tol=tol, theta_s=data.theta_s, theta_m=data.theta_m)
-        u_n = interpolate(u_0, V)
-    else:
-        u_n = Function(V)
-
-    global liq_n, sol_n
-
-    if i==1:
+        theta_0 = Expression('x[1] <= 0.0 + tol ? theta_s : theta_m', degree=0, tol=tol, theta_s=data.theta_s, theta_m=data.theta_m)
+        theta_n = interpolate(theta_0, V)
         liq_0 = Expression('0.0', degree=0)
         liq_n = interpolate(liq_0, V)
         sol_0 = Expression('0.0', degree=0)
         sol_n = interpolate(liq_0, V)
     else:
+        theta_n = Function(V)
         liq_n = Function(V)
         sol_n = Function(V)
+
 
     # Material properties
     global kappa, volhc
@@ -129,8 +116,8 @@ def state(i):
     volhc = interpolate(VOLHC, V)
 
     # Define variational problem
-    global u, v, liq, sol
-    u = TrialFunction(V)
+    global theta, v, liq, sol
+    theta = TrialFunction(V)
     liq = TrialFunction(V)
     sol = TrialFunction(V)
     v = TestFunction(V)
@@ -154,7 +141,7 @@ def state(i):
     #Robin_index=([1,2])
     Robin_index=([3,4])
     for i in Robin_index:
-        integrals_R.append(alpha[i-1]*(u - data.theta_a)*v*dss(i))
+        integrals_R.append(alpha[i-1]*(theta - data.theta_a)*v*dss(i))
 
 
 def solver_temp(i):
@@ -177,12 +164,12 @@ def solver_temp(i):
     phi_source = interpolate(phi, V)
     dt=data.dt
 
-    F = volhc*u*v*dx + dt*kappa*dot(grad(u), grad(v))*dx - (volhc*u_n + dt*phi)*v*dx + sum(integrals_R)
+    F = volhc*theta*v*dx + dt*kappa*dot(grad(theta), grad(v))*dx - (volhc*theta_n + dt*phi)*v*dx + sum(integrals_R)
     a, L = lhs(F), rhs(F)
 
-    solve(a == L, theta)
+    solve(a == L, thetavar)
 
-    return theta
+    return thetavar
 
 def solver_sol(i):
 
@@ -190,7 +177,7 @@ def solver_sol(i):
     Me=data.Me;
     tau_s = data.tau_s;
 
-    s_KM = Expression(' 1-exp(-(Ms-theta)/Me) ', degree=2, Ms=Ms, theta=theta, Me=Me )
+    s_KM = Expression(' 1-exp(-(Ms-theta)/Me) ', degree=2, Ms=Ms, theta=thetavar, Me=Me )
 
     sol_equilfunc = Expression(' std::min( s_KM, liq+sol ) ', degree=2, s_KM=s_KM, liq=liq_n, sol=sol_n )
 
@@ -218,11 +205,11 @@ def solver_liq(i):
     meltingtemp = data.meltingtemp;
 
     #phaseequilfunc = Expression('( theta >= meltingtemp && x[1] >= 0 ) ? 1.0 : 0.0', degree=2, theta=theta, meltingtemp=meltingtemp)
-    heaviside = Expression(' theta >= meltingtemp ? 1.0 : 0.0', degree=2, theta=theta, meltingtemp=meltingtemp)
+    heaviside = Expression(' theta >= meltingtemp ? 1.0 : 0.0', degree=2, theta=thetavar, meltingtemp=meltingtemp)
 
     delta=50;
-    regularizedheavisidepol = Expression('(10/pow(delta,6))*pow(TT-MT-delta,6) - (24/pow(delta,5)) * pow(TT-MT-delta,5) + (15/pow(delta,4)) * pow(TT-MT-delta,4)',degree=2,TT=theta,MT=meltingtemp,delta=delta)
-    regularizedheaviside = Expression('((TT-MT-delta)>=delta)+regularizedheavisidepol*((delta>(TT-MT-delta))&((TT-MT-delta)>=0))', degree=2 , TT=theta,MT=meltingtemp,delta=delta, regularizedheavisidepol=regularizedheavisidepol)
+    regularizedheavisidepol = Expression('(10/pow(delta,6))*pow(TT-MT-delta,6) - (24/pow(delta,5)) * pow(TT-MT-delta,5) + (15/pow(delta,4)) * pow(TT-MT-delta,4)',degree=2,TT=thetavar,MT=meltingtemp,delta=delta)
+    regularizedheaviside = Expression('((TT-MT-delta)>=delta)+regularizedheavisidepol*((delta>(TT-MT-delta))&((TT-MT-delta)>=0))', degree=2 , TT=thetavar,MT=meltingtemp,delta=delta, regularizedheavisidepol=regularizedheavisidepol)
 
     liq_equilfunc = Expression(' x[1] >= 0 ? heaviside : 0.0 ', degree=2, heaviside=heaviside)
 
@@ -270,7 +257,7 @@ def inlineoptions(argv):
             pngplotFlag = int(arg)
         elif opt in ("-v", "--inlinelist"):
             vtkFlag = int(arg)
-    print('Input file is '+inputfile+'.py')
+    print('Data input file is '+inputfile+'.py')
     print('pngFlag is', pngplotFlag)
     print('vtkFlag is', vtkFlag)
 
@@ -280,144 +267,147 @@ if __name__ == '__main__':
     inlineoptions(sys.argv[1:])
     data=importlib.import_module(inputfile)
 
-    t = 0	# time variable initialization
-    # Create VTK file for saving solution
+    # Create vectors for png plots
+    if pngplotFlag==1:
+        # Time vector
+        timevec=ndarray((data.nlay*data.num_steps+1),float)
+        # Max temperature vector
+        maxtemp=ndarray((data.nlay*data.num_steps+1),float)
+        # Integral vectors
+        Intpow=ndarray((data.nlay*data.num_steps+1),float)
+        Intliq=ndarray((data.nlay*data.num_steps+1),float)
+        Intsol=ndarray((data.nlay*data.num_steps+1),float)
+        # Sensor definition and sensor vectors
+        point1=[0.0,0.0] # Top of building platform
+        sensor1temp=ndarray((data.nlay*data.num_steps+1),float)
+        point2=[0.0,0.8*data.hei] # First layer
+        sensor2temp=ndarray((data.nlay*data.num_steps+1),float)
+        sensor2liqu=ndarray((data.nlay*data.num_steps+1),float)
+        sensor2soli=ndarray((data.nlay*data.num_steps+1),float)
+
+    # Create VTK files for saving raw solution
     if vtkFlag==1:
-        vtkfile = File(inputfile + '_results/temperature.pvd')
+        vtkfiletemp = File(inputfile + '_results/temperature.pvd')
         vtkfileliqphase = File(inputfile + '_results/liquid_phase.pvd')
         vtkfilesolphase = File(inputfile + '_results/solid_phase.pvd')
         vtkfilesource = File(inputfile + '_results/source.pvd')
 
-    if pngplotFlag==1:
-        #plotpoints=ndarray((data.nlay*data.num_steps,2),float)
-        Intpow=ndarray((data.nlay*data.num_steps+1),float)
-        Intliq=ndarray((data.nlay*data.num_steps+1),float)
-        Intsol=ndarray((data.nlay*data.num_steps+1),float)
-        timevec=ndarray((data.nlay*data.num_steps+1),float)
-        maxtemp=ndarray((data.nlay*data.num_steps+1),float)
-
-        sensor1temp=ndarray((data.nlay*data.num_steps+1),float)
-        point1=[0.0,0.1]
-        sensor2temp=ndarray((data.nlay*data.num_steps+1),float)
-        sensor2liqu=ndarray((data.nlay*data.num_steps+1),float)
-        sensor2soli=ndarray((data.nlay*data.num_steps+1),float)
-        point2=[0.0,0.1625]
-
-
+    ###################
+    # Loop for layers #
+    ###################
+    t = 0	# Time variable initialization
     for i in range(1,data.nlay+1):
         print('Layer =', i)
 
         if i==1:
             state(i)
-
+            ## EXPORT
+            # Export VTKs with initial condition
             if vtkFlag==1:
-                #EXPORT initial condition
-                u_n.rename("Temperature", "label") # Export vtk with initial temp
-                vtkfile << (u_n, t)
-
-                liq_n.rename("Liquid phase", "label") # Export vtk with initial temp
+                theta_n.rename("Temperature", "label") # Export vtk with initial temp
+                vtkfiletemp << (theta_n, t)
+                liq_n.rename("Liquid phase", "label") # Export vtk with initial liq
                 vtkfileliqphase << (liq_n, t)
-
-                sol_n.rename("Solid phase", "label") # Export vtk with initial temp
+                sol_n.rename("Solid phase", "label") # Export vtk with initial sol
                 vtkfilesolphase << (sol_n, t)
-
+                sol_n.rename("Source", "label") # Export vtk with initial source
+                vtkfilesource << (sol_n, t)
+            # Store initial values for png plots
             if pngplotFlag==1:
+                # Vector with time steps for plotting
+                timevec[0]= 0.0
                 # Store maximum temperature
-                maxtemp[0]=	np.array(u_n.vector()).max()
-                # Calculate and store integral of laser power
+                maxtemp[0]=	np.array(theta_n.vector()).max()
+                # Calculate and store integrals
                 Intpow[0] = 0.0		# Vector storing [ Int_Omega phi dx ] for each time step
-                Intliq[0] = 0.0		# Vector storing [ Int_Omega phi dx ] for each time step
-                Intsol[0] = 0.0		# Vector storing [ Int_Omega phi dx ] for each time step
-                timevec[0]= 0.0								 	# Vector with time steps for plotting
-                sensor1temp[0]=u_n(point1)
-                sensor2temp[0]=u_n(point2)
+                Intliq[0] = 0.0		# Vector storing [ Int_Omega liq dx ] for each time step
+                Intsol[0] = 0.0		# Vector storing [ Int_Omega sol dx ] for each time step
+                # Sensor data
+                sensor1temp[0]=theta_n(point1)
+                sensor2temp[0]=theta_n(point2)
                 sensor2liqu[0]=liq_n(point2)
                 sensor2soli[0]=sol_n(point2)
-                #print('Sensor =', sensor1temp[0])
 
         else:
             state(i)
             #Temperature
-            u_n.interpolate(u2proj)					# Import last temperature field from previous layer
-            setValueAboveHeight(u_n, data.theta_m, (i-1)*data.hei)	# Initial temperature in new material is theta_m
+            theta_n.interpolate(theta2proj)     # Import last temperature field from previous layer
+            setValueAboveHeight(theta_n, data.theta_m, (i-1)*data.hei)  # Initial temperature in new layer is theta_m
             #Liquid phase
             liq_n.interpolate(liq2proj)
             setValueAboveHeight(liq_n, 0.0, (i-1)*data.hei)
             #Solid phase
             sol_n.interpolate(sol2proj)
             setValueAboveHeight(sol_n, 0.0, (i-1)*data.hei)
-
+            ## EXPORT VTKs
             if vtkFlag==1:
-                u_n.rename("Temperature", "label") # Export vtk with initial temp
-                vtkfile << (u_n, t)
-                liq_n.rename("Liquid phase", "label") # Export vtk with initial temp
+                theta_n.rename("Temperature", "label")
+                vtkfiletemp << (theta_n, t)
+                liq_n.rename("Liquid phase", "label")
                 vtkfileliqphase << (liq_n, t)
-                sol_n.rename("Solid phase", "label") # Export vtk with initial temp
+                sol_n.rename("Solid phase", "label")
                 vtkfilesolphase << (sol_n, t)
+                phi_source.rename("Source", "label")
+                vtkfilesource << (phi_source, t)
 
-            if pngplotFlag==1:
-            # Store maximum temperature
-                maxtemp[data.num_steps*(i-1)]=np.array(u_n.vector()).max()
-
-            #################
-            # Time-stepping #
-            #################
-        theta = Function(V) # solution variable initialization
-        liqvar = Function(V) # solution variable initialization
-        solvar = Function(V) # solution variable initialization
-
+        #################
+        # Time-stepping #
+        #################
+        thetavar = Function(V)  # solution variable initialization
+        liqvar = Function(V)    # solution variable initialization
+        solvar = Function(V)    # solution variable initialization
         for k in range(data.num_steps):
             ##Percentage of computation print
             print('Progress: {:.2%}'.format((k+(i-1)*data.num_steps+1)/(data.nlay*data.num_steps)))
-
             # Update current time
             t += data.dt
 
             # Compute solution
             solver_temp(i)
-            if vtkFlag==1:
-                phi_source.rename("source", "label")
-                vtkfilesource << (phi_source, t)
-
             solver_sol(i)
             solver_liq(i)
 
-            # Save to file and plot solution
+            ## EXPORT
+            # VTKs
             if (k!=data.num_steps-1 and vtkFlag==1):
-                theta.rename("Temperature", "label")
-                vtkfile << (theta, t)
+                thetavar.rename("Temperature", "label")
+                vtkfiletemp << (thetavar, t)
                 liqvar.rename("Liquid phase", "label")
                 vtkfileliqphase << (liqvar, t)
                 solvar.rename("Solid phase", "label")
                 vtkfilesolphase << (solvar, t)
-
+                phi_source.rename("Source", "label")
+                vtkfilesource << (phi_source, t)
+            # png plots
             if pngplotFlag==1:
+                # Time vector
+                timevec[k+(i-1)*data.num_steps+1]=t
                 # Store maximum temperature
-                maxtemp[k+(i-1)*data.num_steps+1]=np.array(theta.vector()).max()
-
-                # Calculate and store integral of laser power
+                maxtemp[k+(i-1)*data.num_steps+1]=np.array(thetavar.vector()).max()
+                # Calculate and store integrals
                 Intpow[k+(i-1)*data.num_steps+1] = assemble(phi*dx(domain=mesh))		# Vector storing [ Int_Omega phi dx ] for each time step
                 Intliq[k+(i-1)*data.num_steps+1] = assemble(liqvar*dx(domain=mesh))/(data.nlay*data.wid*data.hei) * 100		# Vector storing [ Int_Omega phi dx ] for each time step
                 Intsol[k+(i-1)*data.num_steps+1] = assemble(solvar*dx(domain=mesh))/(data.nlay*data.wid*data.hei) * 100		# Vector storing [ Int_Omega phi dx ] for each time step
-                timevec[k+(i-1)*data.num_steps+1]=t								 	# Vector with time steps for plotting
-                sensor1temp[k+(i-1)*data.num_steps+1]=theta(point1)
-                sensor2temp[k+(i-1)*data.num_steps+1]=theta(point2)
+                # Sensors								 	# Vector with time steps for plotting
+                sensor1temp[k+(i-1)*data.num_steps+1]=thetavar(point1)
+                sensor2temp[k+(i-1)*data.num_steps+1]=thetavar(point2)
                 sensor2liqu[k+(i-1)*data.num_steps+1]=liqvar(point2)
                 sensor2soli[k+(i-1)*data.num_steps+1]=solvar(point2)
 
             # Update previous solution
-            u_n.assign(theta)
+            theta_n.assign(thetavar)
             liq_n.assign(liqvar)
             sol_n.assign(solvar)
+            # Store solution to prepare for new layer
             if k==data.num_steps-1:
-                u2proj=Function(V)
-                u2proj.assign(theta)
+                theta2proj=Function(V)
+                theta2proj.assign(thetavar)
                 liq2proj=Function(V)
                 liq2proj.assign(liqvar)
                 sol2proj=Function(V)
                 sol2proj.assign(solvar)
 
-
+    ## Create PNG Plots and CSVs
     if pngplotFlag==1:
         # Plot maximum temperature vs time
         plt.plot(timevec, maxtemp, 'b', linewidth=2)
@@ -428,7 +418,7 @@ if __name__ == '__main__':
         plt.grid(True)
         plt.savefig(inputfile + '_results/TempMax.png', dpi=320)
         plt.close()
-        df = pd.DataFrame({'name1' : timevec, 'name2' : maxtemp })
+        df = pd.DataFrame({'time' : timevec, 'maxtemperature' : maxtemp })
         df.to_csv(inputfile + '_results/TempMax.csv', index=False)
 
         # Plot integral of laser power vs time
@@ -439,13 +429,12 @@ if __name__ == '__main__':
         plt.grid(True)
         plt.savefig(inputfile + '_results/LaserPowerInt.png', dpi=320)
         plt.close()
-        df = pd.DataFrame({'name1' : timevec, 'name2' : Intpow })
+        df = pd.DataFrame({'time' : timevec, 'integral_power' : Intpow })
         df.to_csv(inputfile + '_results/LaserPowerInt.csv', index=False)
 
         # Plot integral of laser power vs time
         plt.plot(timevec, Intliq, 'b', linewidth=2)
         plt.plot(timevec, Intsol, 'r', linewidth=2)
-        #xcoords = [0.5,1.5,2.5,3.5,4.5]
         for i in range(data.nlay): # vertical lines on deposition times
             plt.axvline(x=i*data.num_steps*data.dt, color='k', ls=':', lw=1)
         plt.title('Phases concentration in powder area during printing process')
@@ -456,7 +445,8 @@ if __name__ == '__main__':
         plt.grid(True)
         plt.savefig(inputfile + '_results/IntPhases.png', dpi=320)
         plt.close()
-        df = pd.DataFrame({'time' : timevec, 'Int_liq' : Intliq , 'Int_sol' : Intsol })
+        df = pd.DataFrame({'time' : timevec, 'integral_liquid' : Intliq ,
+                            'integral_solid' : Intsol })
         df.to_csv(inputfile + '_results/IntPhases.csv', index=False)
 
         # Plot temperature vs time (Sensor 1)
@@ -466,9 +456,9 @@ if __name__ == '__main__':
         plt.ylabel('Temperature $(\degree C)$')
         plt.legend(['$\\theta$ at sensor in layer $1$'], loc='upper right')
         plt.grid(True)
-        plt.savefig(inputfile + '_results/Temp_Sensor1.png', dpi=320)
+        plt.savefig(inputfile + '_results/Sensor1_Temp.png', dpi=320)
         plt.close()
-        df = pd.DataFrame({'name1' : timevec, 'name2' : sensor1temp })
+        df = pd.DataFrame({'time' : timevec, 'temperature' : sensor1temp })
         df.to_csv(inputfile + '_results/Sensor1_Temp.csv', index=False)
 
         # Plot max temperature and laser power (2 Subplots)
@@ -484,21 +474,9 @@ if __name__ == '__main__':
         axs[1].grid(True)
         plt.savefig(inputfile + '_results/TempMax_LaserInt.png', dpi=320)
         plt.close()
-
-        # Plot liquid phase vs temp (Sensor 2)
-        fig, axs = plt.subplots(2)
-        fig.suptitle('Liquid phase and temperature at sensor in layer 1 during printing process')
-        axs[0].plot(timevec, sensor2liqu, 'b', linewidth=2)
-        axs[0].set(ylabel='Phase concentration $(\\%)$')
-        axs[0].legend(['$l(\\theta)$'], loc='upper right')
-        axs[0].grid(True)
-        axs[1].plot(timevec, sensor2temp, 'b', linewidth=2)
-        axs[1].set(xlabel='Time $(s)$')
-        axs[1].set(ylabel='Temperature $(\degree C)$')
-        axs[1].legend(['$\\theta$'], loc='upper right')
-        axs[1].grid(True)
-        plt.savefig(inputfile + '_results/Sensor2_LiqTemp.png', dpi=320)
-        plt.close()
+        df = pd.DataFrame({'time' : timevec, 'maxtemperature' : maxtemp,
+                            'integral_pow' : Intpow })
+        df.to_csv(inputfile + '_results/TempMax_LaserInt.csv', index=False)
 
         # Plot liquid and Solid phase vs temp (2 y-axis)
         fig, axs = plt.subplots()
@@ -512,19 +490,22 @@ if __name__ == '__main__':
         axs2.set_ylabel('Temperature $(\degree C)$', color="red")
         fig.legend(loc="upper right", bbox_to_anchor=(1,1), bbox_transform=axs.transAxes)
         fig.savefig(inputfile + '_results/Sensor2_LiqSolTemp.png', dpi=320)
+        plt.close()
+        df = pd.DataFrame({'time' : timevec, 'temperature' : sensor2temp,
+                            'liquid' : sensor2liqu, 'solid' : sensor2soli })
+        df.to_csv(inputfile + '_results/Sensor2_LiqSolTemp.csv', index=False)
 
-        # Plot liquid and austenite phase vs temp (2 Subplots)
+        ## Plot liquid phase vs temp (Sensor 2)
         # fig, axs = plt.subplots(2)
-        # fig.suptitle('Phases and temperature at sensor in layer 1 during printing process')
-        # axs[0].plot(timevec, sensor2aust, 'g', linewidth=2)
+        # fig.suptitle('Liquid phase and temperature at sensor in layer 1 during printing process')
         # axs[0].plot(timevec, sensor2liqu, 'b', linewidth=2)
         # axs[0].set(ylabel='Phase concentration $(\\%)$')
-        # axs[0].legend(['$a(\\theta)$','$l(\\theta)$',], loc='upper right')
+        # axs[0].legend(['$l(\\theta)$'], loc='upper right')
         # axs[0].grid(True)
         # axs[1].plot(timevec, sensor2temp, 'b', linewidth=2)
         # axs[1].set(xlabel='Time $(s)$')
         # axs[1].set(ylabel='Temperature $(\degree C)$')
         # axs[1].legend(['$\\theta$'], loc='upper right')
         # axs[1].grid(True)
-        # plt.savefig(inputfile + '_results/liquausttemp_sensor2.png', dpi=320)
+        # plt.savefig(inputfile + '_results/Sensor2_LiqTemp.png', dpi=320)
         # plt.close()
