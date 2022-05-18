@@ -3,52 +3,58 @@
 ########################
 
 ## Domain definition: Omega_0 and Omega_i
-#l	= 0.75				# Width of deposition [mm]
-#h	= 0.2				# Height of deposition [mm]
-#h0	= 0.4			# Height of building platform [mm] [paper = 2]
-l	= 5				# Width of deposition [mm]
-h	= 0.25				# Height of deposition [mm]
-h0	= 2			# Height of building platform [mm] [paper = 2]
+# Omega_0 = building platform
+# Omega_1 = powder layers
 
-n 	= 3			# Number of floors of the structure ##############
-					# (number of passes of the laser)
+wid     = 5          # Width of domain [mm]
+hei     = 0.25       # Height of powder layer [mm]
+hei0    = 2          # Height of building platform [mm] [paper = 2]
 
-## Scanning
+nlay    = 1          # Number of powder layers
 
-lenlas = 5			# Lenght of the laser path [mm]
-vel = 1				# Feed velocity of laser	[mm/s]
+# <---------- l ----------> #
+#
+# ------------------------- # ^
+#           Layer 3         # h
+# ------------------------- # ˅
+#           Layer 2         #
+# ------------------------- #
+#           Layer 1         #
+# ------------------------- # ^
+#                           # |
+#       Building platform   # h0
+#                           # |
+# ------------------------- # ˅
 
-## Laser parameter
+## Scanning parameters
 
-beta= 0.5			# switch on/off for laser (in (0,1))
-					# (treatment and idle time) / {max power of laser at beta*tau/2}
-#ton	= -1-(-l/2)
-#toff= 1-(-l/2)
-ton	= -1-(-5/2)
-toff= 1-(-5/2)
-P0	= 1250
-xx3	= 5	# Parameter to describe the decay of the exponential in the z-direction
+lenlas  = 5         # Lenght of the laser path [mm]
+vel     = 1         # Feed velocity of laser	[mm/s]
+
+## Laser parameters
+
+beta    = 0.5          # switch on/off for laser (in (0,1))
+					   # (treatment and idle time) / {max power of laser at beta*tau/2}
+ton	    = -1-(-wid/2)  # Time to switch on
+toff    = 1-(-wid/2)   # Time to switch off
+P0      = 1250         # Laser power
+xx3     = 5     	   # Parameter to describe the decay of the exponential in the z-direction
 
 
-# TIME and MESH Discretization
-grf	= 1		#global_resolution_factor
+## TIME and MESH Discretization
+grf	    = 1         # Global Resolution Factor (space and time)
 
 tau = lenlas/vel	# Time for a deposition [s] {3.33s for lenlas=125 vel=33.33}
-num_steps = 25*grf	# number of time steps for a deposition/powder layer
+num_steps = 25*grf	# Number of time steps for a deposition/powder layer
 dt	= tau/num_steps	# time step size
 
-T = tau*n      		# final time
+T = tau*nlay      	# Final time
 
 
 ## Process parameters
 theta_a = 25 	# Ambient temperature (C)
 theta_s = 25 	# Building platform inital temperature (C)
-theta_m = 25 	# Molten powder temperature (C) = 2200 K
-#theta_m = 1927 	# Molten powder temperature (C) = 2200 K
-# theta_a = 0.0 	# Ambient temperature (C)
-# theta_s = -2000.0 	# Building platform inital temperature (C)
-# theta_m = 2000.0 	# Molten powder temperature (C) = 2200 K
-
+theta_m = 25 	# Powder temperature (C)
 
 # Material properties (constant)
 # Heat conductivity
