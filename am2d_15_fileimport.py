@@ -1,4 +1,5 @@
 """
+TOBEDONE
 """
 
 from fenics import *
@@ -12,30 +13,22 @@ import pandas as pd
 import importlib
 import sys, getopt
 
-#import input_15 as data
-
+######################
+##  FENICS PREAMBLE ##
+######################
 set_log_level(30) #https://fenicsproject.org/qa/810/how-to-disable-message-solving-linear-variational-problem/
-
-#parameters["num_threads"] = 2;
-
-########################
-## PARAMETER PREAMBLE ##
-########################
-
 parameters["reorder_dofs_serial"] = False
 parameters["allow_extrapolation"] = True  # V_coarse to V projection
-
-
-# Omega_0 = Rectangle(Point(-data.wid/2, -data.hei0), Point(data.wid/2, 0))
+#parameters["num_threads"] = 2;
 
 ########################
 ### STATE DEFINITION ###
 ########################
-
 def state(i):
 
     tol	= DOLFIN_EPS
     # # Sub-domain definitions:
+    # Omega_0 = Rectangle(Point(-data.wid/2, -data.hei0), Point(data.wid/2, 0))
     # omega0 = CompiledSubDomain('x[1] <= 0.0 + tol', tol=tol)
     # omega1 = CompiledSubDomain('x[1] >= 0.0 - tol', tol=tol)
 
@@ -92,7 +85,6 @@ def state(i):
 
     # Define initial values
     global theta_n, liq_n, sol_n
-
     if i==1:
         theta_0 = Expression('x[1] <= 0.0 + tol ? theta_s : theta_m', degree=0, tol=tol, theta_s=data.theta_s, theta_m=data.theta_m)
         theta_n = interpolate(theta_0, V)
@@ -143,7 +135,9 @@ def state(i):
     for i in Robin_index:
         integrals_R.append(alpha[i-1]*(theta - data.theta_a)*v*dss(i))
 
-
+##########################
+### TEMPERATURE SOLVER ###
+##########################
 def solver_temp(i):
     #TODO Define phi0(z), phi1(t) , then phi=phi0(z-ih)*phi1(t-(i-1)tau)
     global phi
@@ -170,7 +164,9 @@ def solver_temp(i):
     solve(a == L, thetavar)
 
     return thetavar
-
+##########################
+### SOLID PHASE SOLVER ###
+##########################
 def solver_sol(i):
 
     Ms=data.Ms;
@@ -198,7 +194,9 @@ def solver_sol(i):
     solvar = interpolate(solphaseRHS2, V)
 
     return solvar
-
+##########################
+### LIQUID PHASE SOLVER ###
+##########################
 def solver_liq(i):
 
     tau_l = data.tau_l;
@@ -225,6 +223,7 @@ def solver_liq(i):
 
     return liqvar
 
+## Auxiliary function
 def setValueAboveHeight(func, value, height): #set value above height
     func_arr = func.vector().get_local()
     coor = mesh.coordinates()
@@ -235,6 +234,7 @@ def setValueAboveHeight(func, value, height): #set value above height
     func.vector()[:] = func_arr
     return func
 
+## Inline arguments aux function
 def inlineoptions(argv):
     global inputfile, pngplotFlag, vtkFlag
     inputfile = "input_00"
@@ -264,9 +264,11 @@ def inlineoptions(argv):
 
 if __name__ == '__main__':
 
+    # Read arguments if given
     inlineoptions(sys.argv[1:])
     data=importlib.import_module(inputfile)
 
+    ## EXPORT
     # Create vectors for png plots
     if pngplotFlag==1:
         # Time vector
@@ -284,7 +286,6 @@ if __name__ == '__main__':
         sensor2temp=ndarray((data.nlay*data.num_steps+1),float)
         sensor2liqu=ndarray((data.nlay*data.num_steps+1),float)
         sensor2soli=ndarray((data.nlay*data.num_steps+1),float)
-
     # Create VTK files for saving raw solution
     if vtkFlag==1:
         vtkfiletemp = File(inputfile + '_results/temperature.pvd')
