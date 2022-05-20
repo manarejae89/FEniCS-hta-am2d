@@ -1,5 +1,22 @@
 """
-TOBEDONE
+FEniCS program for SLM additive manufacturing 2D simulation
+-----------------------------------------------------------
+Authors: M.J. Arenas, D. Hömberg and M. Rosière
+
+    Heat equation with Laser as Source
+    Liquid phase growth ODE
+    Solid phase growth ODE
+
+
+fenics-version 2019.1.0
+
+Optional arguments:
+    am2d_simulation.py -i <datafile> -p <1|0> -v <1|0>
+    am2d_simulation.py -input <datafile> -pngplotOutputFlag <TRUE|FALSE> -vtkOutputFlag <TRUE|FALSE>
+
+More information:
+    https://github.com/manarejae89/FEniCS-hta-am2d
+    https://www.overleaf.com/project/607fe9f8d9855a5d9c72c0d3
 """
 
 from fenics import *
