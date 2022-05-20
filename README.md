@@ -1,1 +1,1 @@
-testboth
+testbothall
