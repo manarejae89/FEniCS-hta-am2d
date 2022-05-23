@@ -1,1 +1,1 @@
-testbothall
+testgitlabprivate
